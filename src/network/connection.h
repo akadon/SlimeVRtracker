@@ -224,6 +224,7 @@ private:
 	IPAddress m_ServerHost = IPAddress(255, 255, 255, 255);
 	unsigned long m_LastConnectionAttemptTimestamp;
 	unsigned long m_LastPacketTimestamp;
+	unsigned long m_DisconnectedSince = 0;  // Timestamp when disconnection started (0 = connected)
 
 	SensorStatus m_AckedSensorState[MAX_SENSORS_COUNT] = {SensorStatus::SENSOR_OFFLINE};
 	SlimeVR::Configuration::SensorConfigBits m_AckedSensorConfigData[MAX_SENSORS_COUNT]

@@ -24,6 +24,7 @@
 
 #include "GlobalVars.h"
 #include "globals.h"
+#include "debug.h"
 #if !ESP8266
 #include "esp_wifi.h"
 #include "esp_wifi_types.h"
@@ -110,6 +111,8 @@ void WiFiNetwork::onConnected() {
 	wifiProvisioning.stopProvisioning();
 	statusManager.setStatus(SlimeVR::Status::WIFI_CONNECTING, false);
 	hadWifi = true;
+	connectionStartTime = millis();
+	lastRoamingCheck = millis();
 	wifiHandlerLogger.info(
 		"Connected successfully to SSID '%s', IP address %s",
 		getSSID().c_str(),
@@ -157,6 +160,10 @@ void WiFiNetwork::upkeep() {
 			uint8_t signalStrength = WiFi.RSSI();
 			networkConnection.sendSignalStrength(signalStrength);
 		}
+
+#if WIFI_ROAMING_ENABLED
+		checkRoaming();
+#endif
 		return;
 	}
 
@@ -375,13 +382,86 @@ bool WiFiNetwork::tryConnecting(bool phyModeG, const char* SSID, const char* pas
 #endif
 
 	setStaticIPIfDefined();
-	if (SSID == nullptr) {
-		WiFi.begin();
+
+	// Clear BSSID lock to allow connecting to any AP with matching SSID
+	// This enables roaming between multiple APs with the same network name
+#if !ESP8266
+	wifi_config_t wifiConfig;
+	if (esp_wifi_get_config(WIFI_IF_STA, &wifiConfig) == ESP_OK) {
+		wifiConfig.sta.bssid_set = false;
+		memset(wifiConfig.sta.bssid, 0, sizeof(wifiConfig.sta.bssid));
+		// Enable scan for all channels to find best AP
+		wifiConfig.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+		wifiConfig.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+		if (SSID != nullptr) {
+			strncpy(reinterpret_cast<char*>(wifiConfig.sta.ssid), SSID, sizeof(wifiConfig.sta.ssid) - 1);
+			wifiConfig.sta.ssid[sizeof(wifiConfig.sta.ssid) - 1] = '\0';
+		}
+		if (pass != nullptr) {
+			strncpy(reinterpret_cast<char*>(wifiConfig.sta.password), pass, sizeof(wifiConfig.sta.password) - 1);
+			wifiConfig.sta.password[sizeof(wifiConfig.sta.password) - 1] = '\0';
+		}
+		esp_wifi_set_config(WIFI_IF_STA, &wifiConfig);
+		esp_wifi_connect();
 	} else {
-		WiFi.begin(SSID, pass);
+		// Fallback to standard WiFi.begin
+		if (SSID == nullptr) {
+			WiFi.begin();
+		} else {
+			WiFi.begin(SSID, pass);
+		}
 	}
+#else
+	// ESP8266: Use channel=0 and bssid=nullptr to scan all APs
+	if (SSID == nullptr) {
+		String savedSSID = getSSID();
+		String savedPass = getPassword();
+		if (savedSSID.length() > 0) {
+			WiFi.begin(savedSSID.c_str(), savedPass.c_str(), 0, nullptr, true);
+		} else {
+			WiFi.begin();
+		}
+	} else {
+		WiFi.begin(SSID, pass, 0, nullptr, true);
+	}
+#endif
 	wifiConnectionTimeout = millis();
 	return true;
+}
+
+void WiFiNetwork::checkRoaming() {
+#if WIFI_ROAMING_ENABLED
+	unsigned long now = millis();
+
+	// Don't check too frequently
+	if (now - lastRoamingCheck < WIFI_ROAMING_CHECK_INTERVAL_MS) {
+		return;
+	}
+	lastRoamingCheck = now;
+
+	// Don't roam too soon after connecting (allow connection to stabilize)
+	if (now - connectionStartTime < WIFI_ROAMING_MIN_TIME_BEFORE_ROAM_MS) {
+		return;
+	}
+
+	int8_t rssi = WiFi.RSSI();
+
+	// If signal is weak, trigger reconnection to find better AP
+	if (rssi < WIFI_ROAMING_RSSI_THRESHOLD) {
+		wifiHandlerLogger.info(
+			"WiFi roaming: Signal weak (%d dBm < %d dBm threshold), searching for better AP...",
+			rssi,
+			WIFI_ROAMING_RSSI_THRESHOLD
+		);
+
+		// Disconnect and reconnect to trigger AP scan
+		WiFi.disconnect();
+		statusManager.setStatus(SlimeVR::Status::WIFI_CONNECTING, true);
+		wifiState = WiFiReconnectionStatus::SavedAttempt;
+		retriedOnG = false;
+		trySavedCredentials();
+	}
+#endif
 }
 
 }  // namespace SlimeVR

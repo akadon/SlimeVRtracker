@@ -87,8 +87,12 @@ private:
 	bool retriedOnG = false;
 	bool hadWifi = false;
 	unsigned long lastRssiSample = 0;
+	unsigned long lastRoamingCheck = 0;
+	unsigned long connectionStartTime = 0;
 
 	uint8_t lastFailStatus = 0;
+
+	void checkRoaming();
 
 	SlimeVR::Logging::Logger wifiHandlerLogger{"WiFiHandler"};
 };

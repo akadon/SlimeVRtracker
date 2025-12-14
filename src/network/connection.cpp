@@ -28,6 +28,11 @@
 #include "GlobalVars.h"
 #include "logging/Logger.h"
 #include "packets.h"
+#include "debug.h"
+
+#ifdef ESP32
+#include <esp_sleep.h>
+#endif
 
 #define TIMEOUT 3000UL
 
@@ -570,6 +575,7 @@ void Connection::searchForServer() {
 			m_ServerPort = m_UDP.remotePort();
 			m_LastPacketTimestamp = millis();
 			m_Connected = true;
+			m_DisconnectedSince = 0;  // Reset disconnection timer on successful connection
 
 			m_FeatureFlagsRequestAttempts = 0;
 			m_ServerFeatures = ServerFeatures{};
@@ -602,6 +608,7 @@ void Connection::searchForServer() {
 
 void Connection::reset() {
 	m_Connected = false;
+	m_DisconnectedSince = millis();  // Start tracking disconnection time from reset
 	std::fill(
 		m_AckedSensorState,
 		m_AckedSensorState + MAX_SENSORS_COUNT,
@@ -628,6 +635,28 @@ void Connection::reset() {
 
 void Connection::update() {
 	if (!m_Connected) {
+		// Check for auto-shutdown if disconnected too long
+#if AUTO_SHUTDOWN_TIMEOUT_MS > 0
+		if (m_DisconnectedSince > 0) {
+			unsigned long disconnectedDuration = millis() - m_DisconnectedSince;
+			if (disconnectedDuration >= AUTO_SHUTDOWN_TIMEOUT_MS) {
+				m_Logger.info(
+					"Auto-shutdown: Not connected to SlimeVR server for %lu minutes. "
+					"Entering deep sleep.",
+					disconnectedDuration / 60000UL
+				);
+				delay(100);  // Allow log message to be sent
+#ifdef ESP32
+				esp_deep_sleep_start();
+#else
+				ESP.deepSleep(0);
+#endif
+			}
+		} else {
+			// Initialize disconnection timer if not set
+			m_DisconnectedSince = millis();
+		}
+#endif
 		searchForServer();
 		return;
 	}
@@ -641,6 +670,12 @@ void Connection::update() {
 		statusManager.setStatus(SlimeVR::Status::SERVER_CONNECTING, true);
 
 		m_Connected = false;
+
+		// Start tracking disconnection time for auto-shutdown
+		if (m_DisconnectedSince == 0) {
+			m_DisconnectedSince = millis();
+		}
+
 		std::fill(
 			m_AckedSensorState,
 			m_AckedSensorState + MAX_SENSORS_COUNT,

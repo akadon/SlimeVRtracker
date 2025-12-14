@@ -61,6 +61,17 @@
 
 // Sleeping options
 #define POWERSAVING_MODE POWER_SAVING_LEGACY  // Minimum causes sporadic data pauses
+
+// Auto-shutdown when not connected to SlimeVR server
+// Set to 0 to disable auto-shutdown
+#define AUTO_SHUTDOWN_TIMEOUT_MS (30UL * 60UL * 1000UL)  // 30 minutes in milliseconds
+
+// WiFi roaming settings
+// When RSSI drops below threshold, trigger reconnect to find better AP
+#define WIFI_ROAMING_ENABLED true
+#define WIFI_ROAMING_RSSI_THRESHOLD -75  // dBm, trigger roaming when signal weaker than this
+#define WIFI_ROAMING_CHECK_INTERVAL_MS 30000  // Check every 30 seconds
+#define WIFI_ROAMING_MIN_TIME_BEFORE_ROAM_MS 60000  // Don't roam within first 60s of connection
 #if POWERSAVING_MODE >= POWER_SAVING_MINIMUM
 #define TARGET_LOOPTIME_MICROS (samplingRateInMillis * 1000)
 #endif
@@ -114,6 +125,10 @@
 
 #ifndef USE_OTA_TIMEOUT
 #define USE_OTA_TIMEOUT false
+#endif
+
+#ifndef BUTTON_ACTIVE_LEVEL
+#define BUTTON_ACTIVE_LEVEL 0
 #endif
 
 #endif  // SLIMEVR_DEBUG_H_

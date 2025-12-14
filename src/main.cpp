@@ -26,6 +26,7 @@
 #include "GlobalVars.h"
 #include "Wire.h"
 #include "batterymonitor.h"
+#include "button.h"
 #include "credentials.h"
 #include "debugging/TimeTaken.h"
 #include "globals.h"
@@ -42,8 +43,6 @@ SlimeVR::Status::StatusManager statusManager;
 SlimeVR::Configuration::Configuration configuration;
 SlimeVR::Network::Manager networkManager;
 SlimeVR::Network::Connection networkConnection;
-SlimeVR::WiFiNetwork wifiNetwork;
-SlimeVR::WifiProvisioning wifiProvisioning;
 
 #if DEBUG_MEASURE_SENSOR_TIME_TAKEN
 SlimeVR::Debugging::TimeTakenMeasurer sensorMeasurer{"Sensors"};
@@ -65,6 +64,11 @@ void setup() {
 	Serial.println();
 	Serial.println();
 	Serial.println();
+
+#ifdef ON_OFF_BUTTON_PIN
+	OnOffButton::getInstance().setup();
+	// OnOffButton::getInstance().onBeforeSleep([]() { sensorManager.deinitAll(); });
+#endif
 
 	logger.info("SlimeVR v" FIRMWARE_VERSION " starting up...");
 
@@ -170,6 +174,14 @@ void loop() {
 	battery.Loop();
 	ledManager.update();
 	I2CSCAN::update();
+
+#ifdef ON_OFF_BUTTON_PIN
+	OnOffButton::getInstance().tick();
+
+	// Always signal tracker as active (allAtRest() not available in this version)
+	OnOffButton::getInstance().signalTrackerMoved();
+#endif
+
 #ifdef TARGET_LOOPTIME_MICROS
 	long elapsed = (micros() - loopTime);
 	if (elapsed < TARGET_LOOPTIME_MICROS) {
