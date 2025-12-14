@@ -608,7 +608,11 @@ void Connection::searchForServer() {
 
 void Connection::reset() {
 	m_Connected = false;
-	m_DisconnectedSince = millis();  // Start tracking disconnection time from reset
+	// Only start tracking disconnection time if we were previously connected
+	// This prevents WiFi reconnects from resetting the auto-shutdown timer
+	if (m_DisconnectedSince == 0) {
+		m_DisconnectedSince = millis();
+	}
 	std::fill(
 		m_AckedSensorState,
 		m_AckedSensorState + MAX_SENSORS_COUNT,

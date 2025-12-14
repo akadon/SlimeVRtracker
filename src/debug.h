@@ -64,7 +64,7 @@
 
 // Auto-shutdown when not connected to SlimeVR server
 // Set to 0 to disable auto-shutdown
-#define AUTO_SHUTDOWN_TIMEOUT_MS (30UL * 60UL * 1000UL)  // 30 minutes in milliseconds
+#define AUTO_SHUTDOWN_TIMEOUT_MS (10UL * 60UL * 1000UL)  // 10 minutes in milliseconds
 
 // WiFi roaming settings
 // When RSSI drops below threshold, trigger reconnect to find better AP
